@@ -1,6 +1,10 @@
+// ASU CSE 471 Course Project
+// Team HAL
+
 // Main file for the Part 1 of the course project.
-// Loads data into a graph structure, then performed
-// a uniform-cost search on the data.
+// Loads data into a graph structure, then performs
+// a search on the data to determine the optimal choices
+// for free marketing cards.
 
 #include <iostream>
 #include <fstream>
@@ -36,8 +40,8 @@ int main(int argc, char *argv[])
 
 		return 0;
 
-	} catch (std::runtime_error e) {
-		std::cout << "An exception occured: " << e.what();
+	} catch (std::exception *e) {
+		std::cout << "search: An exception occurred: " << e->what();
 	}
 }
 
@@ -58,6 +62,6 @@ void loadEdgeFile(const char *pathname, Graph & graph)
 			boost::add_edge_by_label(src, dest, graph);
 		}
 	} else {
-		throw new std::runtime_error("File could not be opened.");
+		throw new std::runtime_error("File could not be opened.\n");
 	}
 }

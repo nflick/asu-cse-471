@@ -7,3 +7,33 @@
 
 #include "State.h"
 
+State::State() : _expectedAdopters(0.0), _receivedCard(),
+	_exposed(), _timestep(0)
+{
+
+}
+
+State::~State()
+{
+
+}
+
+double State::expectedAdopters()
+{
+	return _expectedAdopters;
+}
+
+const std::vector<int> & State::receivedCard()
+{
+	return _receivedCard;
+}
+
+const std::unordered_set<int> & State::exposed()
+{
+	return _exposed;
+}
+
+int State::timespec()
+{
+	return _timestep;
+}
