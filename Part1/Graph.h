@@ -12,9 +12,7 @@ struct VertexData {
 	int id;
 };
 
-typedef boost::labeled_graph<
-	boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, VertexData>, int> Graph;
-
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, VertexData> Graph;
 typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
 typedef boost::graph_traits<Graph>::vertex_iterator VertexIterator;
 typedef boost::graph_traits<Graph>::out_edge_iterator OutEdgeIterator;

@@ -31,28 +31,30 @@ State::SuccessorIterator State::successors() const
 State::SuccessorIterator::SuccessorIterator(const State *predecessor) : _predecessor(predecessor),
 	_current(0)
 {
-	_vertexIterators = boost::vertices(*predecessor->_graph);
+	std::pair<VertexIterator, VertexIterator> pair = boost::vertices(*predecessor->_graph);
+	_nextVertex = pair.first;
+	_endVertex = pair.second;
 	next();
 }
 
 bool State::SuccessorIterator::next()
 {
-	Graph & g = *_predecessor->_graph;
+	Graph & graph = *_predecessor->_graph;
 
-	// Find someone who is not already exposed.
-	while (_vertexIterators.first != _vertexIterators.second &&
-			_predecessor->_exposed.count(g[*_vertexIterators.first].id) > 0) {
-		++_vertexIterators.first;
-	}
-
-	if (_vertexIterators.first == _vertexIterators.second) {
-		// We have iterated through all non-exposed people.
+	if (_nextVertex == _endVertex) {
 		_current = 0;
 		return false;
 	}
 
 	// Person who is receiving a free card.
-	int receiver = g[*_vertexIterators.first].id;
+	Vertex currentVertex = *_nextVertex;
+	int receiver = graph[currentVertex].id;
+
+	// Find someone who is not already exposed.
+	do {
+		++_nextVertex;
+	} while (_nextVertex != _endVertex &&
+		_predecessor->_exposed.count(graph[*_nextVertex].id) > 0);
 
 	// Don't delete old _current as it is client's responsibility to delete.
 	_current = new State(*_predecessor);
@@ -60,15 +62,23 @@ bool State::SuccessorIterator::next()
 	++_current->_timestep;
 
 	std::pair<OutEdgeIterator, OutEdgeIterator> ep;
-	for (ep = boost::out_edges(*_vertexIterators.first, g); ep.first != ep.second; ++ep.first) {
+	for (ep = boost::out_edges(currentVertex, graph); ep.first != ep.second; ++ep.first) {
 		Edge e = *ep.first;
-		_current->_exposed.insert(g[boost::target(e, g)].id);
+		_current->_exposed.insert(graph[boost::target(e, graph)].id);
 	}
 
-	int newExposed = _current->_exposed.size() - _predecessor->_exposed.size();
-	double prop1 = 1.0 - 1.0 / _predecessor->_exposed.size();
-	double propAdopting = prop1 > 0.1 ? prop1 : 0.1;
-	double newAdopting = newExposed * propAdopting;
+	int previousExposed = _predecessor->_exposed.size();
+	int newExposed = _current->_exposed.size() - previousExposed;
+
+	double proportionAdopting;
+	if (previousExposed == 0) {
+		proportionAdopting = 0.1;
+	} else {
+		double prop = 1.0 - 1.0 / previousExposed;
+		proportionAdopting = prop > 0.1 ? prop : 0.1;
+	}
+
+	double newAdopting = newExposed * proportionAdopting;
 	_current->_expectedAdopters += newAdopting;
 
 	return true;

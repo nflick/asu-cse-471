@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "Graph.h"
 #include "State.h"
@@ -54,18 +55,35 @@ int main(int argc, char *argv[])
 void loadEdgeFile(const char *pathname, Graph & graph)
 {
 	std::ifstream file(pathname);
+	std::unordered_map<int, Vertex> vertexMap;
+	typedef std::unordered_map<int, Vertex>::iterator MapIterator;
 
 	if (file.is_open()) {
 		while (!file.eof()) {	// Checks for errors as well as end-of-file.
-			int src, dest;
-			file >> src >> dest;
+			int srcId, destId;
+			file >> srcId >> destId;
 
-			boost::add_vertex(src, graph);
-			graph[src].id = src;
-			boost::add_vertex(dest, graph);
-			graph[dest].id = dest;
+			Vertex src;
+			MapIterator srcIter = vertexMap.find(srcId);
+			if (srcIter == vertexMap.end()) {
+				src = boost::add_vertex(graph);
+				graph[src].id = srcId;
+				vertexMap.insert(std::pair<int, Vertex>(srcId, src));
+			} else {
+				src = srcIter->second;
+			}
 
-			boost::add_edge_by_label(src, dest, graph);
+			Vertex dest;
+			MapIterator destIter = vertexMap.find(destId);
+			if (destIter == vertexMap.end()) {
+				dest = boost::add_vertex(graph);
+				graph[dest].id = destId;
+				vertexMap.insert(std::pair<int, Vertex>(destId, dest));
+			} else {
+				dest = destIter->second;
+			}
+
+			boost::add_edge(src, dest, graph);
 		}
 	} else {
 		throw new std::runtime_error("File could not be opened.\n");

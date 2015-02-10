@@ -41,7 +41,8 @@ public:
 	private:
 		const State *_predecessor;
 		State *_current;
-		std::pair<VertexIterator, VertexIterator> _vertexIterators;
+		VertexIterator _nextVertex;
+		VertexIterator _endVertex;
 	};
 
 	friend class SuccessorIterator;
