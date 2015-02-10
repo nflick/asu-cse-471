@@ -10,17 +10,8 @@
 #include <fstream>
 #include <stdexcept>
 
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/labeled_graph.hpp>
-
-struct VertexData {
-	int id;
-};
-
-typedef boost::labeled_graph<
-	boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, VertexData>, int> Graph;
-typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
+#include "Graph.h"
+#include "State.h"
 
 // Function Declarations
 void loadEdgeFile(const char *pathname, Graph & graph);
@@ -36,7 +27,22 @@ int main(int argc, char *argv[])
 
 		Graph graph;
 		loadEdgeFile(argv[1], graph);
-		std::cout << "Total vertices = " << boost::num_vertices(graph) << '\n';
+
+		State *initial = new State(&graph);
+		State *best = 0;
+		for (State::SuccessorIterator iter = initial->successors(); iter.hasCurrent(); iter.next()) {
+			if (!best) {
+				best = iter.current();
+			} else if (iter.current()->expectedAdopters() > best->expectedAdopters()) {
+				delete best;
+				best = iter.current();
+			} else {
+				delete iter.current();
+			}
+		}
+
+		std::cout << "Best result after first timestep is achieved by picking person " <<
+			best->receivedCard().back() << "\nresulting in " << best->expectedAdopters() << " expected adopters.\n";
 
 		return 0;
 

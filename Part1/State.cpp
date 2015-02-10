@@ -7,8 +7,8 @@
 
 #include "State.h"
 
-State::State() : _expectedAdopters(0.0), _receivedCard(),
-	_exposed(), _timestep(0)
+State::State(Graph *graph) : _graph(graph), _expectedAdopters(0.0),
+	_receivedCard(), _exposed(), _timestep(0)
 {
 
 }
@@ -18,22 +18,58 @@ State::~State()
 
 }
 
-double State::expectedAdopters()
+bool State::isGoal() const
 {
-	return _expectedAdopters;
+	return _receivedCard.size() == 10;
 }
 
-const std::vector<int> & State::receivedCard()
+State::SuccessorIterator State::successors() const
 {
-	return _receivedCard;
+	return SuccessorIterator(this);
 }
 
-const std::unordered_set<int> & State::exposed()
+State::SuccessorIterator::SuccessorIterator(const State *predecessor) : _predecessor(predecessor),
+	_current(0)
 {
-	return _exposed;
+	_vertexIterators = boost::vertices(*predecessor->_graph);
+	next();
 }
 
-int State::timespec()
+bool State::SuccessorIterator::next()
 {
-	return _timestep;
+	Graph & g = *_predecessor->_graph;
+
+	// Find someone who is not already exposed.
+	while (_vertexIterators.first != _vertexIterators.second &&
+			_predecessor->_exposed.count(g[*_vertexIterators.first].id) > 0) {
+		++_vertexIterators.first;
+	}
+
+	if (_vertexIterators.first == _vertexIterators.second) {
+		// We have iterated through all non-exposed people.
+		_current = 0;
+		return false;
+	}
+
+	// Person who is receiving a free card.
+	int receiver = g[*_vertexIterators.first].id;
+
+	// Don't delete old _current as it is client's responsibility to delete.
+	_current = new State(*_predecessor);
+	_current->_receivedCard.push_back(receiver);
+	++_current->_timestep;
+
+	std::pair<OutEdgeIterator, OutEdgeIterator> ep;
+	for (ep = boost::out_edges(*_vertexIterators.first, g); ep.first != ep.second; ++ep.first) {
+		Edge e = *ep.first;
+		_current->_exposed.insert(g[boost::target(e, g)].id);
+	}
+
+	int newExposed = _current->_exposed.size() - _predecessor->_exposed.size();
+	double prop1 = 1.0 - 1.0 / _predecessor->_exposed.size();
+	double propAdopting = prop1 > 0.1 ? prop1 : 0.1;
+	double newAdopting = newExposed * propAdopting;
+	_current->_expectedAdopters += newAdopting;
+
+	return true;
 }

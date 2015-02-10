@@ -1,11 +1,8 @@
 CXX=g++
-CXXFLAGS=-std=c++11
+CXXFLAGS=-std=c++11 -Wall
 
-search: Main.cpp
-	$(CXX) $(CXXFLAGS) -o search Main.cpp
-
-debug: Main.cpp
-	$(CXX) $(CXXFLAGS) -g -o search_debug Main.cpp
+debug: Main.cpp State.cpp State.h
+	$(CXX) $(CXXFLAGS) -g -o main Main.cpp State.cpp
 
 clean:
-	- rm search search_debug
+	- rm main
