@@ -12,21 +12,26 @@
 #include <vector>
 #include <unordered_set>
 #include <utility>
+#include <ostream>
 
 #include "Graph.h"
 
 
 class State {
 public:
-	State(Graph *graph);
+	State(Graph *graph, unsigned int maxFreeCards);
 	~State();
 
-	inline double expectedAdopters() { return _expectedAdopters; }
-	inline const std::vector<int> & receivedCard() { return _receivedCard; }
-	inline const std::unordered_set<int> & exposed() { return _exposed; }
-	inline int timestep() { return _timestep; }
+	inline double expectedAdopters() const { return _expectedAdopters; }
+	inline double nonAdopters() const { return _nonAdopters; }
+	inline const std::vector<int> & receivedCard() const { return _receivedCard; }
+	inline const std::unordered_set<int> & exposed() const { return _exposed; }
+	inline unsigned int timestep() const { return _receivedCard.size(); }
+	inline unsigned int maxFreeCards() const { return _maxFreeCards; }
 
 	bool isGoal() const;
+	void print(std::ostream & os);
+	
 	class SuccessorIterator;
 	SuccessorIterator successors() const;
 
@@ -50,9 +55,10 @@ public:
 private:
 	Graph *_graph;
 	double _expectedAdopters;
+	double _nonAdopters;
 	std::vector<int> _receivedCard;
 	std::unordered_set<int> _exposed;
-	int _timestep;
+	unsigned int _maxFreeCards;
 };
 
 #endif // STATE_H

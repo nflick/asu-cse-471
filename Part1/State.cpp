@@ -7,8 +7,8 @@
 
 #include "State.h"
 
-State::State(Graph *graph) : _graph(graph), _expectedAdopters(0.0),
-	_receivedCard(), _exposed(), _timestep(0)
+State::State(Graph *graph, unsigned int maxFreeCards) : _graph(graph), _expectedAdopters(0.0),
+	_nonAdopters(0.0), _receivedCard(), _exposed(), _maxFreeCards(maxFreeCards)
 {
 
 }
@@ -20,7 +20,28 @@ State::~State()
 
 bool State::isGoal() const
 {
-	return _receivedCard.size() == 10;
+	return _receivedCard.size() == _maxFreeCards;
+}
+
+void State::print(std::ostream & os)
+{
+	os << "Given free cards: [";
+	for (auto iter = _receivedCard.cbegin(); iter != _receivedCard.cend(); ++iter) {
+		if (iter != _receivedCard.cbegin()) {
+			os << ", ";
+		}
+
+		os << *iter;
+	}
+
+	os << "]";
+	if (isGoal()) {
+		os << " (FINAL)\nExpected adopters: ";
+	} else {
+		os << "\nExpected adopters: ";
+	}
+
+	os << _expectedAdopters << "\nNon-adopters: " << _nonAdopters << '\n';
 }
 
 State::SuccessorIterator State::successors() const
@@ -59,7 +80,6 @@ bool State::SuccessorIterator::next()
 	// Don't delete old _current as it is client's responsibility to delete.
 	_current = new State(*_predecessor);
 	_current->_receivedCard.push_back(receiver);
-	++_current->_timestep;
 
 	std::pair<OutEdgeIterator, OutEdgeIterator> ep;
 	for (ep = boost::out_edges(currentVertex, graph); ep.first != ep.second; ++ep.first) {
@@ -68,18 +88,31 @@ bool State::SuccessorIterator::next()
 	}
 
 	int previousExposed = _predecessor->_exposed.size();
-	int newExposed = _current->_exposed.size() - previousExposed;
+	int newlyExposed = _current->_exposed.size() - previousExposed;
 
-	double proportionAdopting;
+	double proportion;
 	if (previousExposed == 0) {
-		proportionAdopting = 0.1;
+		proportion = 0.1;
 	} else {
-		double prop = 1.0 - 1.0 / previousExposed;
-		proportionAdopting = prop > 0.1 ? prop : 0.1;
+		proportion = 1.0 - 1.0 / previousExposed;
+		proportion = proportion > 0.1 ? proportion : 0.1;
 	}
 
-	double newAdopting = newExposed * proportionAdopting;
-	_current->_expectedAdopters += newAdopting;
+	double newlyAdopting = newlyExposed * proportion + 1; // +1 for the person who was given a free card
+	_current->_expectedAdopters += newlyAdopting;
+	double nonAdopting = newlyExposed * (1 - proportion);
+	_current->_nonAdopters += nonAdopting;
+
+	// The receiver is added to the set of exposed people here so that
+	// it is not included in the above calculation to determine the number of people adopting.
+	_current->_exposed.insert(receiver);
+
+	if (_current->timestep() == _current->_maxFreeCards) {
+		// The final card was just given. Therefore, add all people who have not been exposed
+		// (and will now never be exposed) to the nonAdopters count.
+		int totalExposed = _current->_exposed.size();
+		_current->_nonAdopters += boost::num_vertices(graph) - totalExposed;
+	}
 
 	return true;
 }

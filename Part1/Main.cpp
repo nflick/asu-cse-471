@@ -13,9 +13,21 @@
 
 #include "Graph.h"
 #include "State.h"
+#include "Uninformed.h"
+
+struct GraphStats {
+	GraphStats() : totalNodes(0), maxEdgesNode(-1), maxEdges(-1) {}
+	
+	int totalNodes;
+	int maxEdgesNode;
+	int maxEdges;
+};
 
 // Function Declarations
 void loadEdgeFile(const char *pathname, Graph & graph);
+GraphStats graphStats(Graph & graph);
+
+const int MAX_DEPTH = 2;
 
 int main(int argc, char *argv[])
 {
@@ -28,8 +40,13 @@ int main(int argc, char *argv[])
 
 		Graph graph;
 		loadEdgeFile(argv[1], graph);
+		State *initialState = new State(&graph, MAX_DEPTH);
 
-		State *initial = new State(&graph);
+		State *best = uniformCostSearch(initialState);
+
+		best->print(std::cout);
+
+		/*State *initial = new State(&graph, 1);
 		State *best = 0;
 		for (State::SuccessorIterator iter = initial->successors(); iter.hasCurrent(); iter.next()) {
 			if (!best) {
@@ -44,12 +61,20 @@ int main(int argc, char *argv[])
 
 		std::cout << "Best result after first timestep is achieved by picking person " <<
 			best->receivedCard().back() << "\nresulting in " << best->expectedAdopters() << " expected adopters.\n";
+		*/
+
+		/*GraphStats stats = graphStats(graph);
+		std::cout << "Graph has " << stats.totalNodes << " nodes.\n";
+		std::cout << "Most connected node is node " << stats.maxEdgesNode << " with " << stats.maxEdges << " edges.\n";
+		*/
 
 		return 0;
 
 	} catch (std::exception *e) {
 		std::cout << "search: An exception occurred: " << e->what();
 	}
+
+	return 1;
 }
 
 void loadEdgeFile(const char *pathname, Graph & graph)
@@ -88,4 +113,28 @@ void loadEdgeFile(const char *pathname, Graph & graph)
 	} else {
 		throw new std::runtime_error("File could not be opened.\n");
 	}
+}
+
+GraphStats graphStats(Graph & graph)
+{
+	GraphStats stats;
+
+	for (std::pair<VertexIterator, VertexIterator> vp = boost::vertices(graph);
+			vp.first != vp.second; ++vp.first) {
+
+		int count = 0;
+		for (std::pair<OutEdgeIterator, OutEdgeIterator> ep = boost::out_edges(*vp.first, graph);
+				ep.first != ep.second; ++ep.first) {
+			++count;
+		}
+
+		if (count > stats.maxEdges) {
+			stats.maxEdges = count;
+			stats.maxEdgesNode = graph[*vp.first].id;
+		}
+
+		++stats.totalNodes;
+	}
+
+	return stats;
 }
