@@ -1,7 +1,8 @@
-#include "Uninformed.h"
+#include "Search.h"
 
 #include <queue>
 #include <stdexcept>
+#include <ostream>
 
 State *uniformCostSearch(State *initialState)
 {
@@ -39,4 +40,54 @@ State *uniformCostSearch(State *initialState)
 	delete initialNode;
 
 	return solutionState;
+}
+
+State *exhaustiveSearch(State *state)
+{
+	if (state->isGoal()) {
+		return state;
+	}
+
+	State *best = 0;
+	for (State::SuccessorIterator iter = state->successors(); iter.hasCurrent(); iter.next()) {
+		State *current = iter.current();
+		State *solution = exhaustiveSearch(current);
+
+		if (current != solution) {
+			delete current;
+		}
+
+		if (best == 0) {
+			best = solution;
+		} else if (solution != 0 && solution->nonAdopters() < best->nonAdopters()) {
+			delete best;
+			best = solution;
+		} else if (solution != 0) {
+			delete solution;
+		}
+	}
+
+	return best;
+}
+
+State *iterativeDeepening(Graph *graph, int maxDepth, std::ostream & os)
+{
+	State *solution = 0;
+
+	for (int depth = 1; depth <= maxDepth; ++depth) {
+		if (solution) {
+			delete solution;
+		}
+
+		State *initial = new State(graph, depth);
+		solution = exhaustiveSearch(initial);
+
+		os << "[Results for depth=" << depth << "]\n";
+		solution->print(os);
+		os << '\n';
+
+		delete initial;
+	}
+
+	return solution;
 }
