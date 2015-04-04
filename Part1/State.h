@@ -19,8 +19,9 @@
 
 class State {
 public:
-	State(Graph *graph, unsigned int maxFreeCards);
-	~State();
+	inline State(Graph *graph, unsigned int maxFreeCards) : _graph(graph), _expectedAdopters(0.0),
+		_nonAdopters(0.0), _receivedCard(), _exposed(), _maxFreeCards(maxFreeCards) {}
+	inline ~State() {}
 
 	inline double expectedAdopters() const { return _expectedAdopters; }
 	inline double nonAdopters() const { return _nonAdopters; }

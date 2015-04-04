@@ -7,17 +7,6 @@
 
 #include "State.h"
 
-State::State(Graph *graph, unsigned int maxFreeCards) : _graph(graph), _expectedAdopters(0.0),
-	_nonAdopters(0.0), _receivedCard(), _exposed(), _maxFreeCards(maxFreeCards)
-{
-
-}
-
-State::~State()
-{
-
-}
-
 bool State::isGoal() const
 {
 	return _receivedCard.size() == _maxFreeCards;

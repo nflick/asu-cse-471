@@ -10,22 +10,15 @@
 #include <fstream>
 #include <stdexcept>
 #include <unordered_map>
+#include <algorithm>
 
 #include "Graph.h"
 #include "State.h"
-#include "Uninformed.h"
-
-struct GraphStats {
-	GraphStats() : totalNodes(0), maxEdgesNode(-1), maxEdges(-1) {}
-	
-	int totalNodes;
-	int maxEdgesNode;
-	int maxEdges;
-};
+#include "Search.h"
 
 // Function Declarations
 void loadEdgeFile(const char *pathname, Graph & graph);
-GraphStats graphStats(Graph & graph);
+void printGraphStats(Graph & graph);
 
 const int MAX_DEPTH = 2;
 
@@ -40,33 +33,12 @@ int main(int argc, char *argv[])
 
 		Graph graph;
 		loadEdgeFile(argv[1], graph);
-		State *initialState = new State(&graph, MAX_DEPTH);
-
-		State *best = uniformCostSearch(initialState);
-
-		best->print(std::cout);
-
-		/*State *initial = new State(&graph, 1);
-		State *best = 0;
-		for (State::SuccessorIterator iter = initial->successors(); iter.hasCurrent(); iter.next()) {
-			if (!best) {
-				best = iter.current();
-			} else if (iter.current()->expectedAdopters() > best->expectedAdopters()) {
-				delete best;
-				best = iter.current();
-			} else {
-				delete iter.current();
-			}
-		}
-
-		std::cout << "Best result after first timestep is achieved by picking person " <<
-			best->receivedCard().back() << "\nresulting in " << best->expectedAdopters() << " expected adopters.\n";
-		*/
-
-		/*GraphStats stats = graphStats(graph);
-		std::cout << "Graph has " << stats.totalNodes << " nodes.\n";
-		std::cout << "Most connected node is node " << stats.maxEdgesNode << " with " << stats.maxEdges << " edges.\n";
-		*/
+		//printGraphStats(graph);
+		//iterativeDeepening(&graph, 10, std::cout);
+		State initialState(&graph, 3);
+		State *solution = uniformCostSearch(&initialState);
+		solution->print(std::cout);
+		delete solution;
 
 		return 0;
 
@@ -115,26 +87,36 @@ void loadEdgeFile(const char *pathname, Graph & graph)
 	}
 }
 
-GraphStats graphStats(Graph & graph)
+struct NodeInfo {
+	NodeInfo(const int & id) : _id(id), _edges(0) {}
+
+	int _id, _edges;
+
+	bool operator<(const NodeInfo & other) {
+		return _edges > other._edges;
+	}
+};
+
+void printGraphStats(Graph & graph)
 {
-	GraphStats stats;
+	std::vector<NodeInfo> vec;
 
 	for (std::pair<VertexIterator, VertexIterator> vp = boost::vertices(graph);
 			vp.first != vp.second; ++vp.first) {
 
-		int count = 0;
+		vec.emplace_back(graph[*vp.first].id);
+
 		for (std::pair<OutEdgeIterator, OutEdgeIterator> ep = boost::out_edges(*vp.first, graph);
 				ep.first != ep.second; ++ep.first) {
-			++count;
+			++vec.back()._edges;
 		}
-
-		if (count > stats.maxEdges) {
-			stats.maxEdges = count;
-			stats.maxEdgesNode = graph[*vp.first].id;
-		}
-
-		++stats.totalNodes;
 	}
 
-	return stats;
+	std::sort(vec.begin(), vec.end());
+
+	std::cout << "<Node>: <Edge count>\n";
+	std::cout << "--------------------\n";
+	for (auto iter = vec.cbegin(); iter != vec.cend(); ++iter) {
+		std::cout << iter->_id << ": " << iter->_edges << "\n";
+	}
 }
