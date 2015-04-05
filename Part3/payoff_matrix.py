@@ -26,7 +26,7 @@ def prob_defended(x_a, x_d):
     if (x_a + x_d >= 101):
         return 1
     else: 
-        return float(ncr(99, x_a - 1) * ncr(99, x_d - 1) * 100) / ( ncr(100, x_a) * ncr(100, x_d) )
+        return 1 - (float(ncr(100 - x_a, x_d)) / ncr(100, x_d))
     
 def ncr(n, r):
     r = min(r, n-r)
