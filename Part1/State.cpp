@@ -39,11 +39,35 @@ State::SuccessorIterator State::successors() const
 }
 
 State::SuccessorIterator::SuccessorIterator(const State *predecessor) : _predecessor(predecessor),
-	_current(0)
+	_current(0), _exposed(), _tempExposed()
 {
+	Graph & graph = *predecessor->_graph;
+
 	std::pair<VertexIterator, VertexIterator> pair = boost::vertices(*predecessor->_graph);
 	_nextVertex = pair.first;
 	_endVertex = pair.second;
+
+	std::unordered_set<int> received;
+	for (auto iter = predecessor->_receivedCard.begin(); iter != predecessor->_receivedCard.end(); ++iter) {
+		received.insert(*iter);
+	}
+
+	for (std::pair<VertexIterator, VertexIterator> vertices = boost::vertices(graph);
+		vertices.first != vertices.second; ++vertices.first) {
+
+		int id = graph[*vertices.first].id;
+		if (received.count(id)) {
+			_exposed.insert(id);
+
+			for (std::pair<OutEdgeIterator, OutEdgeIterator> edges = boost::out_edges(*vertices.first, graph);
+				edges.first != edges.second; ++edges.first) {
+
+				int neighbor = graph[boost::target(*edges.first, graph)].id;
+				_exposed.insert(neighbor);
+			}
+		}
+	}
+
 	next();
 }
 
@@ -64,20 +88,26 @@ bool State::SuccessorIterator::next()
 	do {
 		++_nextVertex;
 	} while (_nextVertex != _endVertex &&
-		_predecessor->_exposed.count(graph[*_nextVertex].id) > 0);
+		_exposed.count(graph[*_nextVertex].id) > 0);
 
 	// Don't delete old _current as it is client's responsibility to delete.
 	_current = new State(*_predecessor);
 	_current->_receivedCard.push_back(receiver);
 
+
+	int previousExposed = _exposed.size();
+
 	std::pair<OutEdgeIterator, OutEdgeIterator> ep;
 	for (ep = boost::out_edges(currentVertex, graph); ep.first != ep.second; ++ep.first) {
 		Edge e = *ep.first;
-		_current->_exposed.insert(graph[boost::target(e, graph)].id);
+		int neighbor = graph[boost::target(e, graph)].id;
+		if (_exposed.count(neighbor) == 0) {
+			_tempExposed.push_back(neighbor);
+			_exposed.insert(neighbor);
+		}
 	}
 
-	int previousExposed = _predecessor->_exposed.size();
-	int newlyExposed = _current->_exposed.size() - previousExposed;
+	int newlyExposed = _exposed.size() - previousExposed;
 
 	double proportion;
 	if (previousExposed == 0) {
@@ -91,67 +121,69 @@ bool State::SuccessorIterator::next()
 	_current->_expectedAdopters += newlyAdopting;
 	double nonAdopting = newlyExposed * (1 - proportion);
 	_current->_nonAdopters += nonAdopting;
-	_current->_heuristicNonAdopters = -1.0;
 
 	// The receiver is added to the set of exposed people here so that
 	// it is not included in the above calculation to determine the number of people adopting.
-	_current->_exposed.insert(receiver);
+	_exposed.insert(receiver);
+	_tempExposed.push_back(receiver);
 
 	if (_current->timestep() == _current->_maxFreeCards) {
 		// The final card was just given. Therefore, add all people who have not been exposed
 		// (and will now never be exposed) to the nonAdopters count.
-		int totalExposed = _current->_exposed.size();
-		_current->_nonAdopters += boost::num_vertices(graph) - totalExposed;
+		int totalExposed = _exposed.size();
+		_current->_nonAdopters += _predecessor->_numPeople - totalExposed;
+	}
+
+	_current->calcHeuristic(_exposed);
+
+	for (auto iter = _tempExposed.begin(); iter != _tempExposed.end(); ++iter) {
+		_exposed.erase(*iter);
 	}
 
 	return true;
 }
 
-double State::heuristicNonAdopters() const
+void State::calcHeuristic(std::unordered_set<int> & exposed)
 {
-	if (_heuristicNonAdopters < 0) {
-		if (timestep() == _maxFreeCards) {
-			_heuristicNonAdopters = nonAdopters();
-		} else {
-			std::vector<int> unexposed;
-			Graph & graph = *_graph;
+	if (timestep() == _maxFreeCards) {
+		_heuristic = nonAdopters();
+	} else {
+		std::vector<int> unexposed;
+		Graph & graph = *_graph;
 
-			for (std::pair<VertexIterator, VertexIterator> vertices = boost::vertices(graph);
-				vertices.first != vertices.second; ++vertices.first) {
+		for (std::pair<VertexIterator, VertexIterator> vertices = boost::vertices(graph);
+			vertices.first != vertices.second; ++vertices.first) {
 
-				if (_exposed.count(graph[*vertices.first].id) == 0) {
+			if (exposed.count(graph[*vertices.first].id) == 0) {
 
-					int count = 1;
-					for (std::pair<OutEdgeIterator, OutEdgeIterator> edges = boost::out_edges(*vertices.first, graph);
-						edges.first != edges.second; ++edges.first) {
+				int count = 1;
+				for (std::pair<OutEdgeIterator, OutEdgeIterator> edges = boost::out_edges(*vertices.first, graph);
+					edges.first != edges.second; ++edges.first) {
 
-						int neighbor = graph[boost::target(*edges.first, graph)].id;
-						if (_exposed.count(neighbor) == 0) {
-							++count;
-						}
+					int neighbor = graph[boost::target(*edges.first, graph)].id;
+					if (exposed.count(neighbor) == 0) {
+						++count;
 					}
-
-					unexposed.push_back(count);
 				}
+
+				unexposed.push_back(count);
 			}
-
-			// Sort the unexposed list
-			std::sort(unexposed.begin(), unexposed.end(), std::greater<int>());
-
-			// Sum the first (total timesteps - current timestep)
-			int remainingCards = _maxFreeCards - timestep();
-			int maxUnexposed = 0;
-			for (int i = 0; i < remainingCards; ++i) {
-				maxUnexposed += unexposed[i];
-			}
-
-			// Cap maxConversions at number of remaining people
-			int remainingPeople = _numPeople - _exposed.size();
-			maxUnexposed = maxUnexposed < remainingPeople ? maxUnexposed : remainingPeople;
-			double totalConversion = _expectedAdopters + (double)maxUnexposed;
-			_heuristicNonAdopters = (double)_numPeople - totalConversion;
 		}
-	}
 
-	return _heuristicNonAdopters;
+		// Sort the unexposed list
+		std::sort(unexposed.begin(), unexposed.end(), std::greater<int>());
+
+		// Sum the first (total timesteps - current timestep)
+		int remainingCards = _maxFreeCards - timestep();
+		int maxUnexposed = 0;
+		for (int i = 0; i < remainingCards; ++i) {
+			maxUnexposed += unexposed[i];
+		}
+
+		// Cap maxConversions at number of remaining people
+		int remainingPeople = _numPeople - exposed.size();
+		maxUnexposed = maxUnexposed < remainingPeople ? maxUnexposed : remainingPeople;
+		double totalConversion = _expectedAdopters + (double)maxUnexposed;
+		_heuristic = (double)_numPeople - totalConversion;
+	}
 }

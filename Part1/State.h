@@ -22,14 +22,18 @@
 class State {
 public:
 	inline State(Graph *graph, unsigned int maxFreeCards) : _graph(graph), _expectedAdopters(0.0),
-		_nonAdopters(0.0), _receivedCard(), _exposed(), _maxFreeCards(maxFreeCards),
-		_numPeople(boost::num_vertices(*graph)) {}
+		_nonAdopters(0.0), _receivedCard(), _maxFreeCards(maxFreeCards),
+		_numPeople(boost::num_vertices(*graph)) {
+			std::unordered_set<int> exposed;
+			calcHeuristic(exposed);
+		}
+
 	inline ~State() {}
 
 	inline double expectedAdopters() const { return _expectedAdopters; }
 	inline double nonAdopters() const { return _nonAdopters; }
+	inline double heuristic() const { return _heuristic; }
 	inline const std::vector<int> & receivedCard() const { return _receivedCard; }
-	inline const std::unordered_set<int> & exposed() const { return _exposed; }
 	inline unsigned int timestep() const { return _receivedCard.size(); }
 	inline unsigned int maxFreeCards() const { return _maxFreeCards; }
 
@@ -38,11 +42,11 @@ public:
 		// the node with the lowest cost needs to be considered greatest, which
 		// is why this uses a greater-than rather than a less-than in comparing
 		// the costs.
-		return heuristicNonAdopters() > other.heuristicNonAdopters();
+		return _heuristic > other._heuristic;
 	}
 
 	bool isGoal() const;
-	double heuristicNonAdopters() const;
+	void calcHeuristic(std::unordered_set<int> & exposed);
 	void print(std::ostream & os);
 	
 	class SuccessorIterator;
@@ -61,6 +65,8 @@ public:
 		State *_current;
 		VertexIterator _nextVertex;
 		VertexIterator _endVertex;
+		std::unordered_set<int> _exposed;
+		std::vector<int> _tempExposed;
 	};
 
 	friend class SuccessorIterator;
@@ -69,9 +75,8 @@ private:
 	Graph *_graph;
 	double _expectedAdopters;
 	double _nonAdopters;
-	mutable double _heuristicNonAdopters;
+	double _heuristic;
 	std::vector<int> _receivedCard;
-	std::unordered_set<int> _exposed;
 	unsigned int _maxFreeCards;
 	unsigned int _numPeople;
 };

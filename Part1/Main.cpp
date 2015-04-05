@@ -25,17 +25,34 @@ const int MAX_DEPTH = 2;
 
 int main(int argc, char *argv[])
 {
-	if (argc != 3) {
-		std::cout << "Usage: " << argv[0] << " <DEPTH> <EDGE FILE>\n";
+	if (argc != 4) {
+		std::cout << "Usage: " << argv[0] << " <ALGORITHM> <DEPTH> <EDGE FILE>\n" <<
+			"\twhere ALGORITHM is one of 'uniform', 'exhaustive', or 'A-star'\n";
 		return 0;
 	}
 
 	try {
-
+		std::string algorithm(argv[1]);
+		int depth = std::stoi(std::string(argv[2]));
 		Graph graph;
-		loadEdgeFile(argv[2], graph);
-		State initialState(&graph, std::stoi(std::string(argv[1])));
-		State *solution = astar(&initialState);
+		loadEdgeFile(argv[3], graph);
+		State initialState(&graph, depth);
+		State *solution = 0;
+
+		if (algorithm == "uniform") {
+			std::cout << "Running uniform cost search.\n";
+			solution = uniformCostSearch(&initialState);
+		} else if (algorithm == "exhaustive") {
+			std::cout << "Running exhaustive search.\n";
+			solution = exhaustiveSearch(&initialState);
+		} else if (algorithm == "A-star") {
+			std::cout << "Running A-star search.\n";
+			solution = astar(&initialState);
+		} else {
+			std::cout << "Unknown algorithm.\n";
+			return 1;
+		}
+
 		solution->print(std::cout);
 		
 		//for (State::SuccessorIterator iter = initialState.successors(); iter.hasCurrent(); iter.next()) {
