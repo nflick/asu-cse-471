@@ -91,3 +91,41 @@ State *iterativeDeepening(Graph *graph, int maxDepth, std::ostream & os)
 
 	return solution;
 }
+
+State *astar(State *initial)
+{
+	std::priority_queue<State*> frontier;
+	// Make a copy of initial state because the copy will be deleted with the node tree.
+	frontier.push(new State(*initial));
+	State *solution = 0;
+
+	do {
+		State *state = frontier.top();
+		frontier.pop();
+
+		if (state->isGoal()) {
+			solution = state;
+			break;
+		}
+
+		for (State::SuccessorIterator iter = state->successors(); iter.hasCurrent(); iter.next()) {
+			State *child = iter.current();
+			frontier.push(child);
+		}
+
+		delete state;
+
+	} while (!frontier.empty());
+
+	// Delete all remaining states in queue.
+	while (!frontier.empty()) {
+		delete frontier.top();
+		frontier.pop();
+	}
+
+	if (!solution) {
+		throw new std::runtime_error("No goal state in solution space.");
+	}
+
+	return solution;
+}
