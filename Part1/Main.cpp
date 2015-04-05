@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <algorithm>
+#include <string>
 
 #include "Graph.h"
 #include "State.h"
@@ -24,21 +25,37 @@ const int MAX_DEPTH = 2;
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2) {
-		std::cout << "Usage: " << argv[0] << " <EDGE FILE>\n";
+	if (argc != 3) {
+		std::cout << "Usage: " << argv[0] << " <DEPTH> <EDGE FILE>\n";
 		return 0;
 	}
 
 	try {
 
 		Graph graph;
-		loadEdgeFile(argv[1], graph);
+		loadEdgeFile(argv[2], graph);
+		State initialState(&graph, std::stoi(std::string(argv[1])));
+		State *solution = astar(&initialState);
+		solution->print(std::cout);
+		
+		//for (State::SuccessorIterator iter = initialState.successors(); iter.hasCurrent(); iter.next()) {
+		//	State *current = iter.current();
+		//	current->print(std::cout);
+		//	std::cout << "Heuristic non-adopters: " << current->heuristicNonAdopters() << "\n\n";
+		//}
+
+
+		//std::cout << "heuristicNonAdopters: " << initialState.heuristicNonAdopters() << "\n";
+		//std::cout << "nonAdopters: " << initialState.nonAdopters() << "\n";
+		//solution->print(std::cout);
+		//std::cout << "heuristicNonAdopters: " << solution->heuristicNonAdopters() << "\n";
+		//std::cout << "nonAdopters: " << solution->nonAdopters() << "\n";
 		//printGraphStats(graph);
 		//iterativeDeepening(&graph, 10, std::cout);
-		State initialState(&graph, 3);
-		State *solution = uniformCostSearch(&initialState);
-		solution->print(std::cout);
-		delete solution;
+		//State initialState(&graph, 3);
+		//State *solution = uniformCostSearch(&initialState);
+		//solution->print(std::cout);
+		//delete solution;
 
 		return 0;
 
