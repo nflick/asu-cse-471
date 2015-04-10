@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.node {
+    stroke: #fff;
+      stroke-width: 1.5px;
+}
+
+.link {
+    stroke: #999;
+      stroke-opacity: .6;
+}
+
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+var width = 2000,
+    height = 2000;
+
+var color = d3.scale.category20();
+
+var force = d3.layout.force()
+    .charge(-400)
+    .linkDistance(400)
+    .size([width, height]);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+d3.json("348.edges.json", function(error, graph) {
+  var n = graph.nodes.length;
+  graph.nodes.forEach(function(d, i) { d.x = d.y = width / n * i; });
+  force
+      .nodes(graph.nodes)
+      .links(graph.links)
+      .start();
+
+  for (var i = n; i > 0; --i) force.tick();
+  force.stop();
+
+  var ox = 0, oy = 0;
+  graph.nodes.forEach(function(d) { ox += d.x, oy += d.y; });
+  ox = ox / n - width / 2, oy = oy / n - height / 2;
+  graph.nodes.forEach(function(d) { d.x -= ox, d.y -= oy; });
+
+  var link = svg.selectAll(".link")
+      .data(graph.links)
+    .enter().append("line")
+      .attr("class", "link")
+      .attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; })
+      .style("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+  var node = svg.selectAll(".node")
+      .data(graph.nodes)
+    .enter().append("circle")
+      .attr("class", "node")
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", 4.5)
+      .style("fill", function(d) { return color(d.group); })
+      .call(force.drag);
+
+});
+
+
+</script>
+
