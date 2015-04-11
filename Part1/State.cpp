@@ -39,7 +39,7 @@ State::SuccessorIterator State::successors() const
 }
 
 State::SuccessorIterator::SuccessorIterator(const State *predecessor) : _predecessor(predecessor),
-	_current(0), _exposed(), _tempExposed()
+	_current(0), _exposed()
 {
 	Graph & graph = *predecessor->_graph;
 
@@ -74,6 +74,7 @@ State::SuccessorIterator::SuccessorIterator(const State *predecessor) : _predece
 bool State::SuccessorIterator::next()
 {
 	Graph & graph = *_predecessor->_graph;
+	std::unordered_set<int> exposed = _exposed;
 
 	if (_nextVertex == _endVertex) {
 		_current = 0;
@@ -88,26 +89,23 @@ bool State::SuccessorIterator::next()
 	do {
 		++_nextVertex;
 	} while (_nextVertex != _endVertex &&
-		_exposed.count(graph[*_nextVertex].id) > 0);
+		exposed.count(graph[*_nextVertex].id) > 0);
 
 	// Don't delete old _current as it is client's responsibility to delete.
 	_current = new State(*_predecessor);
 	_current->_receivedCard.push_back(receiver);
 
 
-	int previousExposed = _exposed.size();
 
 	std::pair<OutEdgeIterator, OutEdgeIterator> ep;
 	for (ep = boost::out_edges(currentVertex, graph); ep.first != ep.second; ++ep.first) {
 		Edge e = *ep.first;
 		int neighbor = graph[boost::target(e, graph)].id;
-		if (_exposed.count(neighbor) == 0) {
-			_tempExposed.push_back(neighbor);
-			_exposed.insert(neighbor);
-		}
+		exposed.insert(neighbor);
 	}
 
-	int newlyExposed = _exposed.size() - previousExposed;
+	int previousExposed = _exposed.size();
+	int newlyExposed = exposed.size() - previousExposed;
 
 	double proportion;
 	if (previousExposed == 0) {
@@ -124,21 +122,16 @@ bool State::SuccessorIterator::next()
 
 	// The receiver is added to the set of exposed people here so that
 	// it is not included in the above calculation to determine the number of people adopting.
-	_exposed.insert(receiver);
-	_tempExposed.push_back(receiver);
+	exposed.insert(receiver);
 
 	if (_current->timestep() == _current->_maxFreeCards) {
 		// The final card was just given. Therefore, add all people who have not been exposed
 		// (and will now never be exposed) to the nonAdopters count.
-		int totalExposed = _exposed.size();
+		int totalExposed = exposed.size();
 		_current->_nonAdopters += _predecessor->_numPeople - totalExposed;
 	}
 
-	_current->calcHeuristic(_exposed);
-
-	for (auto iter = _tempExposed.begin(); iter != _tempExposed.end(); ++iter) {
-		_exposed.erase(*iter);
-	}
+	_current->calcHeuristic(exposed);
 
 	return true;
 }

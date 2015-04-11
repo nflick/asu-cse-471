@@ -1,0 +1,20 @@
+[Results for depth=1]
+Given free cards: [376] (FINAL)
+Expected adopters: 10.9
+Non-adopters: 213.1
+
+[Results for depth=2]
+Given free cards: [457, 376] (FINAL)
+Expected adopters: 96.05
+Non-adopters: 127.95
+
+[Results for depth=3]
+Given free cards: [424, 493, 376] (FINAL)
+Expected adopters: 122.479
+Non-adopters: 101.521
+
+[Results for depth=4]
+Given free cards: [198, 369, 493, 376] (FINAL)
+Expected adopters: 142.217
+Non-adopters: 81.7833
+

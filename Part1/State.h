@@ -66,7 +66,6 @@ public:
 		VertexIterator _nextVertex;
 		VertexIterator _endVertex;
 		std::unordered_set<int> _exposed;
-		std::vector<int> _tempExposed;
 	};
 
 	friend class SuccessorIterator;
