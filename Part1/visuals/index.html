@@ -41,6 +41,7 @@ d3.json("348.edges.json", function(error, graph) {
 
   for (var i = n; i > 0; --i) force.tick();
   force.stop();
+  
 
   var ox = 0, oy = 0;
   graph.nodes.forEach(function(d) { ox += d.x, oy += d.y; });
