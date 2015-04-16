@@ -5,73 +5,188 @@ import copy
 import random
 import itertools
 import math
+import scipy.stats
+import operator
+import functools
+
+class DataSet:
+	def __init__(self, num_features, continuous, discrete, strategy):
+		self.num_features = num_features
+		self.continuous = set(continuous)
+		self.discrete = set(discrete)
+		assert(self.num_features == len(self.continuous) + len(self.discrete))
+		if strategy == 'average' or strategy == 'isolate':
+			self.strategy = strategy
+		else:
+			raise Exception('Invalid argument strategy. Must be one of \'average\' or \'isolate\'.')
+
+	def load(self, source, extractor):
+		self.source = source
+		with open(source, 'r') as f:
+			self.samples = []
+			reader = csv.reader(f)
+			for line in reader:
+				self.samples.append(extractor(self, line))
+		self.gen_averages()
+		self.fill_missing()
+		self.fill_values()
+
+	def gen_averages(self):
+		self.averages = {}
+		for i in range(self.num_features):
+			if i in self.continuous:
+				average = sum(sample.features[i] for sample in self.samples if sample.features[i] is not None) / len(self.samples)
+				self.averages[i] = average
+			elif i in self.discrete:
+				values = {}
+				for sample in self.samples:
+					if sample.features[i] in values:
+						values[sample.features[i]] += 1
+					else:
+						values[sample.features[i]] = 1
+				most_common = max((pair[1], pair[0]) for pair in values.items())[1]
+				self.averages[i] = most_common
+		positive_count = sum(1 if sample.classification else 0 for sample in self.samples)
+		self.proportion = positive_count / len(self.samples)
+		self.plurality = positive_count > (len(self.samples) / 2)
+
+	def fill_missing(self):
+		for i in range(self.num_features):
+			if i in self.continuous:
+				average = self.averages[i]
+				for sample in self.samples:
+					if sample.features[i] is None:
+						sample.features[i] = average
+			elif i in self.discrete:
+				if self.strategy == 'average':
+					replacement = self.averages[i]
+				elif self.strategy == 'isolate':
+					replacement = '?'
+				else:
+					raise Exception('Unknown strategy. Must be one of \'average\' or \'isolate\'.')
+				for sample in self.samples:
+					if sample.features[i] is None:
+						sample.features[i] = replacement
+
+	def fill_values(self):
+		self.values = {}
+		for i in range(self.num_features):
+			if i in self.continuous:
+				min_ = self.samples[0].features[i]
+				max_ = min_
+				for sample in self.samples:
+					feature = sample.features[i]
+					min_ = min(min_, feature)
+					max_ = max(max_, feature)
+				self.values[i] = (min_, max_)
+			elif i in self.discrete:
+				values = set()
+				for sample in self.samples:
+					values.add(sample.features[i])
+				self.values[i] = values
+
 
 class Sample:
-	def __init__(self, line):
-		self.continuous = []
-		self.discrete = []
-		for entry in line[:-1]:
-			try:
-				self.continuous.append(int(entry))
-			except ValueError:
-				try:
-					self.continuous.append(float(entry))
-				except ValueError:
-					self.discrete.append(entry)
-		self.classification = True if line[-1] == '+' else False
-
-	def __str__(self):
-		return 'Sample(continuous={0}, discrete={1}, classification={2})'.format(
-			self.continuous, self.discrete, self.classification)
-
-class DecisionNode:
-	def __init__(self, value, attribute, children):
-		self.value = value
-		self.attribute = attribute
-		self.children = children
-
-	def classify(self, sample):
-		return self.children[sample.discrete[self.attribute]].classify(sample)
-
-	def expand(self, depth):
-		print('{0}DecisionNode value={1}, attribute={2}'.format('  ' * depth, self.value, self.attribute))
-		for child in self.children:
-			self.children[child].expand(depth + 1)
-
-class LeafNode:
-	def __init__(self, value, classification):
-		self.value = value
+	def __init__(self, features, classification):
+		self.features = features
 		self.classification = classification
 
-	def classify(self, sample):
-		return self.classification
+	def __str__(self):
+		return 'Sample(features={0}, classification={1})'.format(self.features, self.classification)
 
-	def expand(self, depth):
-		print('{0}LeafNode value={1}, classification={2}'.format('  ' * depth, self.value, self.classification))
+	def __repr__(self):
+		return str(self)
+
+def extract_sample(dataset, line):
+	features = line[:dataset.num_features]
+	for i in range(len(features)):
+		if i in dataset.continuous:
+			try:
+				features[i] = float(features[i])
+			except ValueError:
+				features[i] = None
+		else:
+			if features[i] == '?':
+				features[i] = None
+	classification = True if line[-1] == '+' else False
+	return Sample(features, classification)
+
+class DecisionNode:
+	def __init__(self, parent, samples, feature, gain):
+		self.parent = parent
+		self.samples = samples
+		self.feature = feature
+		self.gain = gain
+		self.children = {}
+
+	def classify(self, sample):
+		return self.children[sample.features[self.feature]].classify(sample)
+
+	def __str__(self):
+		p = sum(1 if sample.classification else 0 for sample in self.samples)
+		n = len(self.samples) - p
+		if self.parent is None:
+			value = None
+		else:
+			for value, child in self.parent.children.items():
+				if self == child:
+					break
+		return 'DecisionNode(value={0}, p={1}, n={2}, feature={3})'.format(value, p, n, self.feature)
+
+	def print_repr(self, depth):
+		print('{0}{1}'.format('    ' * depth, self))
+		for child in self.children:
+			self.children[child].print_repr(depth + 1)
+
+class LeafNode:
+	def __init__(self, parent, samples, classification, type_):
+		self.parent = parent
+		self.samples = samples
+		self.classification = classification
+		self.type_ = type_
+
+	def classify(self, sample):
+		return (self.classification, self.type_)
+
+	def __str__(self):
+		p = sum(1 if sample.classification else 0 for sample in self.samples)
+		n = len(self.samples) - p
+		if self.parent is None:
+			value = None
+		else:
+			for value, child in self.parent.children.items():
+				if self == child:
+					break
+		return 'LeafNode(value={0}, p={1}, n={2}, classification={3}, type={4})'.format(
+			value, p, n, self.classification, self.type_)
+
+	def print_repr(self, depth):
+		print('{0}{1}'.format('    ' * depth, self))
 
 def entropy(q):
 	if q <= 0 or q >= 1:
 		return 0
 	return q * math.log(1/q, 2) + (1 - q) * math.log(1/(1-q), 2)
 
-def attribute_entropy(samples, attr):
+def feature_entropy(samples, feature):
 	p = 0
 	n = 0
 	pk = {}
 	nk = {}
 	for sample in samples:
+		value = sample.features[feature]
 		if sample.classification:
 			p += 1
-			if sample.discrete[attr] in pk:
-				pk[sample.discrete[attr]] += 1
+			if value in pk:
+				pk[value] += 1
 			else:
-				pk[sample.discrete[attr]] = 1
+				pk[value] = 1
 		else:
 			n += 1
-			if sample.discrete[attr] in nk:
-				nk[sample.discrete[attr]] += 1
+			if value in nk:
+				nk[value] += 1
 			else:
-				nk[sample.discrete[attr]] = 1
+				nk[value] = 1
 	m = set(itertools.chain(pk.keys(), nk.keys()))
 	e = 0.0
 	for k in m:
@@ -85,60 +200,141 @@ def attribute_entropy(samples, attr):
 		e += (float(pk_ + nk_) / (p + n)) * entropy(float(pk_) / (pk_ + nk_))
 	return e
 
-def gain(samples, attr):
-	return 1 - attribute_entropy(samples, attr)
+def gain(dataset, samples, feature):
+	return entropy(dataset.proportion) - feature_entropy(samples, feature)
 
-def build_tree(samples, parent_value, remaining_attr):
+def plurality_value(samples):
 	positive_count = sum(1 if sample.classification else 0 for sample in samples)
-	if positive_count == len(samples):
-		return LeafNode(parent_value, True)
-	elif positive_count == 0:
-		return LeafNode(parent_value, False)
+	return (positive_count > (len(samples) / 2), positive_count == len(samples) or positive_count == 0)
 
-	if len(remaining_attr) == 0:
-		return LeafNode(parent_value, True if positive_count > (len(samples) / 2) else False)
+def build_tree(dataset, samples, parent, remaining_features):
+	if len(samples) == 0:
+		return LeafNode(parent, samples, plurality_value(parent.samples)[0], 'empty')
+		#return LeafNode(parent, samples, dataset.plurality, 'empty')
 
-	best_attr = min(remaining_attr)
-	best_gain = 0
-	for attr in remaining_attr:
-		g = gain(samples, attr)
+	plurality, unanimous = plurality_value(samples)
+	if unanimous:
+		return LeafNode(parent, samples, plurality, 'unanimous')
+	if len(remaining_features) == 0:
+		return LeafNode(parent, samples, plurality, 'plurality')
+
+	best_feature = min(remaining_features)
+	best_gain = gain(dataset, samples, best_feature)
+	for feature in remaining_features:
+		g = gain(dataset, samples, feature)
 		if g > best_gain:
-			best_attr = attr
+			best_feature = feature
 			best_gain = g
 
-	next_remaining_attr = copy.copy(remaining_attr)
-	next_remaining_attr.discard(best_attr)
+	next_remaining_features = copy.copy(remaining_features)
+	next_remaining_features.discard(best_feature)
 
-	values = set()
-	for sample in samples:
-		values.add(sample.discrete[best_attr])
+	node = DecisionNode(parent, samples, best_feature, best_gain)
+	for value in dataset.values[best_feature]:
+		filtered_samples = [sample for sample in samples if sample.features[best_feature] == value]
+		node.children[value] = build_tree(dataset, filtered_samples, node, next_remaining_features)
 
-	children = {}
-	for value in values:
-		filtered_samples = [sample for sample in samples if sample.discrete[best_attr] == value]
-		child = build_tree(filtered_samples, value, next_remaining_attr)
-		children[value] = child
+	return node
 
-	return DecisionNode(parent_value, best_attr, children)
+def significance_test(dataset, node):
+	#delta = 0
+	#for value, child in node.children.items():
+	#	pk = sum(1 if sample.classification else 0 for sample in child.samples)
+	#	nk = len(child.samples) - pk
+	#	pk_expected = dataset.proportion * len(child.samples)
+	#	nk_expected = len(child.samples) - pk_expected
+	#	delta += (pk - pk_expected) ** 2 / pk_expected + (nk - nk_expected) ** 2 / nk_expected
+	chisq, p = scipy.stats.chisquare([sum(1 if sample.classification else 0 for sample in child.samples) 
+			for value, child in node.children.items()])
+	return p <= 0.1
 
-def read(path):
-	with open(path, 'r') as f:
-		reader = csv.reader(f)
-		return [Sample(line) for line in reader]
+def prune_tree(dataset, parent, node):
+	if isinstance(node, LeafNode):
+		return node
+	for value, child in list(node.children.items()):
+		node.children[value] = prune_tree(dataset, node, child)
+
+	# Check if all remaining children are leaf nodes
+	for value, child in node.children.items():
+		if not isinstance(child, LeafNode):
+			return node
+
+	# All remaining children are leaf nodes. Check if they all have the same classification.
+	classification = next(iter(node.children.values())).classification
+	for value, child in node.children.items():
+		if child.classification != classification:
+			break
+	else:
+		# All children have same classification. Prune this node.
+		return LeafNode(parent, node.samples, classification, 'pruned')
+
+	if significance_test(dataset, node):
+		return node
+	else:
+		# Node is not significant. Prune it.
+		plurality, unanimous = plurality_value(node.samples)
+		return LeafNode(parent, node.samples, plurality, 'pruned')
+
+def partition(samples, k):
+	partitions = []
+	while len(samples) > 0:
+		num = int(math.ceil(float(len(samples)) / k))
+		partitions.append(samples[:num])
+		samples = samples[num:]
+		k -= 1
+	return partitions
+
+def cross_validate(dataset, kfold):
+	partitions = partition(dataset.samples[:], kfold)
+	true_pos = 0
+	true_neg = 0
+	false_pos = 0
+	false_neg = 0
+	total = 0
+
+	for k in range(kfold):
+		training = functools.reduce(operator.add, (p for i, p in enumerate(partitions) if i != k))
+		test = partitions[k]
+
+		root = build_tree(dataset, training, None, dataset.discrete)
+		root = prune_tree(dataset, None, root)
+
+		for sample in test:
+			classification, type_ = root.classify(sample)
+			if classification and sample.classification:
+				true_pos += 1
+			elif not classification and sample.classification:
+				false_neg += 1
+			elif classification and not sample.classification:
+				false_pos += 1
+			else:
+				true_neg += 1
+		total += len(test)
+
+	print('Total:           {0}'.format(total))
+	print('True positives:  {0}'.format(true_pos))
+	print('False positives: {0}'.format(false_pos))
+	print('True negatives:  {0}'.format(true_neg))
+	print('False negatives: {0}'.format(false_neg))
+	print('Precision:       {0}'.format(true_pos / (true_pos + false_pos)))
+	print('Recall:          {0}'.format(true_pos / (true_pos + false_neg)))
+
+def compare_pruned(dataset):
+	root = build_tree(dataset, dataset.samples, None, dataset.discrete)
+	root.print_repr(0)
+	print('===========================================================')
+	print('===========================================================')
+	root = prune_tree(dataset, None, root)
+	root.print_repr(0)
+
+def print_entropy(dataset):
+	for feature in dataset.discrete:
+		print('Feature {0}: {1}'.format(feature, feature_entropy(dataset.samples, feature)))
 
 def main():
-	samples = read('crx.data.csv')
-	random.shuffle(samples)
-	mid = len(samples) >> 1
-	training = samples[:mid]
-	test = samples[mid:]
-
-	root = build_tree(samples, None, set(range(len(samples[0].discrete))))
-	correct = 0
-	for trial in test:
-		if root.classify(trial) == trial.classification:
-			correct += 1
-	print('Correct: {0} / {1}'.format(correct, len(test)))
+	dataset = DataSet(15, [1, 2, 7, 10, 13, 14], [0, 3, 4, 5, 6, 8, 9, 11, 12], 'isolate')
+	dataset.load('crx.data.csv', extract_sample)
+	cross_validate(dataset, 5)
 
 if __name__ == '__main__':
 	main()
