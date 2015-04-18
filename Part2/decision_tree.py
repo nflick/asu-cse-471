@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import csv
 import copy
 import random
@@ -8,6 +9,8 @@ import math
 import scipy.stats
 import operator
 import functools
+
+import PyML as pyml
 
 class DataSet:
 	def __init__(self, num_features, continuous, discrete, strategy):
@@ -87,9 +90,16 @@ class DataSet:
 
 
 class Sample:
-	def __init__(self, features, classification):
+	def __init__(self, dataset, features, classification):
+		self.dataset = dataset
 		self.features = features
 		self.classification = classification
+
+	def continuous(self):
+		return [self.features[i] for i in sorted(self.dataset.continuous)]
+
+	def discrete(self):
+		return [self.features[i] for i in sorted(self.dataset.discrete)]
 
 	def __str__(self):
 		return 'Sample(features={0}, classification={1})'.format(self.features, self.classification)
@@ -109,7 +119,7 @@ def extract_sample(dataset, line):
 			if features[i] == '?':
 				features[i] = None
 	classification = True if line[-1] == '+' else False
-	return Sample(features, classification)
+	return Sample(dataset, features, classification)
 
 class DecisionNode:
 	def __init__(self, parent, samples, feature, gain):
@@ -162,6 +172,37 @@ class LeafNode:
 
 	def print_repr(self, depth):
 		print('{0}{1}'.format('    ' * depth, self))
+
+class SvmNode:
+	def __init__(self, parent, samples):
+		self.parent = parent
+		self.samples = samples
+		self.type_ = 'svm'
+		matrix = [sample.continuous() for sample in self.samples]
+		labels = ['+' if sample.classification else '-' for sample in samples]
+		self.vds = pyml.VectorDataSet(matrix, L=labels)
+		self.svm = pyml.SVM()
+		self.svm.train(self.vds)
+
+	def classify(self, sample):
+		vds = pyml.VectorDataSet([sample.continuous()])
+		res = self.svm.test(vds)
+		return (res.getPredictedLabels(0)[0] == '+', self.type_)
+
+	def __str__(self):
+		p = sum(1 if sample.classification else 0 for sample in self.samples)
+		n = len(self.samples) - p
+		if self.parent is None:
+			value = None
+		else:
+			for value, child in self.parent.children.items():
+				if self == child:
+					break
+		return 'LeafNode(value={0}, p={1}, n={2})'.format(value, p, n)
+
+	def print_repr(self, depth):
+		print('{0}{1}'.format('    ' * depth, self))
+
 
 def entropy(q):
 	if q <= 0 or q >= 1:
@@ -279,6 +320,23 @@ def prune_tree(dataset, parent, node):
 		plurality, unanimous = plurality_value(node.samples)
 		return LeafNode(parent, node.samples, plurality, 'pruned')
 
+def inject_svm(dataset, parent, node):
+	if isinstance(node, DecisionNode):
+		for value, child in list(node.children.items()):
+			node.children[value] = inject_svm(dataset, node, child)
+		return node
+
+	if not isinstance(node, LeafNode):
+		return node
+
+	plurality, unanimous = plurality_value(node.samples)
+	if unanimous:
+		return node
+
+	# Replace with SVM node
+	return SvmNode(parent, node.samples)
+
+
 def partition(samples, k):
 	partitions = []
 	while len(samples) > 0:
@@ -290,14 +348,16 @@ def partition(samples, k):
 
 def cross_validate(dataset, kfold):
 	samples = dataset.samples[:]
-	#random.seed(0)
-	#random.shuffle(samples)
 	partitions = partition(samples, kfold)
 	true_pos = 0
 	true_neg = 0
 	false_pos = 0
 	false_neg = 0
 	total = 0
+	errors = {}
+
+	stdout = sys.stdout
+	sys.stdout = open('/dev/null', 'w')
 
 	for k in range(kfold):
 		training = functools.reduce(operator.add, (p for i, p in enumerate(partitions) if i != k))
@@ -305,18 +365,33 @@ def cross_validate(dataset, kfold):
 
 		root = build_tree(dataset, training, None, dataset.discrete)
 		root = prune_tree(dataset, None, root)
+		#root = inject_svm(dataset, None, root)
 
 		for sample in test:
 			classification, type_ = root.classify(sample)
+			error = False
 			if classification and sample.classification:
 				true_pos += 1
 			elif not classification and sample.classification:
 				false_neg += 1
+				error = True
 			elif classification and not sample.classification:
 				false_pos += 1
+				error = True
 			else:
 				true_neg += 1
+
+			if error:
+				if type_ in errors:
+					errors[type_] += 1
+				else:
+					errors[type_] = 1
+
 		total += len(test)
+
+	null = sys.stdout
+	sys.stdout = stdout
+	null.close()
 
 	print('Total:           {0}'.format(total))
 	print('True positives:  {0}'.format(true_pos))
@@ -325,6 +400,7 @@ def cross_validate(dataset, kfold):
 	print('False negatives: {0}'.format(false_neg))
 	print('Precision:       {0}'.format(true_pos / float(true_pos + false_pos)))
 	print('Recall:          {0}'.format(true_pos / float(true_pos + false_neg)))
+	print('Errors:          {0}'.format(errors))
 
 def compare_pruned(dataset):
 	root = build_tree(dataset, dataset.samples, None, dataset.discrete)
