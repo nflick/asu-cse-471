@@ -47,8 +47,8 @@ class DataSet:
 				most_common = max((pair[1], pair[0]) for pair in values.items())[1]
 				self.averages[i] = most_common
 		positive_count = sum(1 if sample.classification else 0 for sample in self.samples)
-		self.proportion = positive_count / len(self.samples)
-		self.plurality = positive_count > (len(self.samples) / 2)
+		self.proportion = float(positive_count) / len(self.samples)
+		self.plurality = positive_count > (len(self.samples) / 2.0)
 
 	def fill_missing(self):
 		for i in range(self.num_features):
@@ -166,7 +166,7 @@ class LeafNode:
 def entropy(q):
 	if q <= 0 or q >= 1:
 		return 0
-	return q * math.log(1/q, 2) + (1 - q) * math.log(1/(1-q), 2)
+	return q * math.log(1.0/q, 2) + (1 - q) * math.log(1/(1.0-q), 2)
 
 def feature_entropy(samples, feature):
 	p = 0
@@ -196,7 +196,8 @@ def feature_entropy(samples, feature):
 			pk_ = 0
 		if k in nk:
 			nk_ = nk[k]
-		else: nk_ = 0
+		else:
+			nk_ = 0
 		e += (float(pk_ + nk_) / (p + n)) * entropy(float(pk_) / (pk_ + nk_))
 	return e
 
@@ -205,7 +206,7 @@ def gain(dataset, samples, feature):
 
 def plurality_value(samples):
 	positive_count = sum(1 if sample.classification else 0 for sample in samples)
-	return (positive_count > (len(samples) / 2), positive_count == len(samples) or positive_count == 0)
+	return (positive_count > (len(samples) / 2.0), positive_count == len(samples) or positive_count == 0)
 
 def build_tree(dataset, samples, parent, remaining_features):
 	if len(samples) == 0:
@@ -237,15 +238,18 @@ def build_tree(dataset, samples, parent, remaining_features):
 	return node
 
 def significance_test(dataset, node):
-	#delta = 0
-	#for value, child in node.children.items():
-	#	pk = sum(1 if sample.classification else 0 for sample in child.samples)
-	#	nk = len(child.samples) - pk
-	#	pk_expected = dataset.proportion * len(child.samples)
-	#	nk_expected = len(child.samples) - pk_expected
-	#	delta += (pk - pk_expected) ** 2 / pk_expected + (nk - nk_expected) ** 2 / nk_expected
-	chisq, p = scipy.stats.chisquare([sum(1 if sample.classification else 0 for sample in child.samples) 
-			for value, child in node.children.items()])
+	delta = 0
+	df = 0
+	for child in node.children.values():
+		if len(child.samples) == 0:
+			continue
+		pk = sum(1 if sample.classification else 0 for sample in child.samples)
+		nk = len(child.samples) - pk
+		pk_expected = dataset.proportion * len(child.samples)
+		nk_expected = len(child.samples) - pk_expected
+		delta += float(pk - pk_expected) ** 2 / pk_expected + float(nk - nk_expected) ** 2 / nk_expected
+		df += 1
+	p = 1 - scipy.stats.chi2.cdf(delta, df=df)
 	return p <= 0.1
 
 def prune_tree(dataset, parent, node):
@@ -285,7 +289,10 @@ def partition(samples, k):
 	return partitions
 
 def cross_validate(dataset, kfold):
-	partitions = partition(dataset.samples[:], kfold)
+	samples = dataset.samples[:]
+	#random.seed(0)
+	#random.shuffle(samples)
+	partitions = partition(samples, kfold)
 	true_pos = 0
 	true_neg = 0
 	false_pos = 0
@@ -316,8 +323,8 @@ def cross_validate(dataset, kfold):
 	print('False positives: {0}'.format(false_pos))
 	print('True negatives:  {0}'.format(true_neg))
 	print('False negatives: {0}'.format(false_neg))
-	print('Precision:       {0}'.format(true_pos / (true_pos + false_pos)))
-	print('Recall:          {0}'.format(true_pos / (true_pos + false_neg)))
+	print('Precision:       {0}'.format(true_pos / float(true_pos + false_pos)))
+	print('Recall:          {0}'.format(true_pos / float(true_pos + false_neg)))
 
 def compare_pruned(dataset):
 	root = build_tree(dataset, dataset.samples, None, dataset.discrete)
