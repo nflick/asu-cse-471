@@ -1,8 +1,6 @@
 import operator as op
 import csv
 V = 100
-B = 10000
-c_d = 100
 
 def compute_payoffs(x_a, x_d, c_a):
     return ( (1 - prob_defended(x_a, x_d)) * payoff_success_a(x_a, c_a) + 
@@ -11,16 +9,16 @@ def compute_payoffs(x_a, x_d, c_a):
             prob_defended(x_a, x_d) * payoff_success_d(x_d) )
 
 def payoff_success_a(x_a, c_a):
-    return B - x_a * c_a
+    return 10000 - x_a * c_a
 
 def payoff_fail_a(x_a, c_a):
     return - x_a * c_a
 
 def payoff_success_d(x_d):
-    return - x_d * c_d
+    return - x_d * 100
 
 def payoff_fail_d(x_d):
-    return - B - x_d * c_d
+    return (- 10000 - x_d * 100)
 
 def prob_defended(x_a, x_d):
     if (x_a + x_d >= 101):
