@@ -9,7 +9,7 @@ def Make_Test():
 	train= [[0 for x in range(3)] for x in range(691)]
 	h=0
 	i=0
-	f=open('/home/sp3ncer/Desktop/data_files/crx.data.csv')
+	f=open('crx.data.csv')
 	csv_f=csv.reader(f)
 	for row in csv_f:
 		values[h][1]='1:'+row[1]

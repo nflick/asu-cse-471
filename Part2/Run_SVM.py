@@ -3,7 +3,7 @@ from PyML.classifiers import knn
 from PyML import *
 
 
-data= SparseDataSet('values.data')
+data= SparseDataSet('values.csv')
 s= SVM()
 r=s.cv(data, numFolds=5)
 print r
